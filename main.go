@@ -10,6 +10,7 @@ import (
 	"path"
 	"runtime"
 	"runtime/pprof"
+	"sync"
 
 	"github.com/takeyourhatoff/hsv"
 )
@@ -20,6 +21,11 @@ var (
 	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 	memprofile = flag.String("memprofile", "", "write mem profile to file")
 )
+
+type sample struct {
+	index int
+	name  string
+}
 
 func main() {
 	flag.Parse()
@@ -33,19 +39,34 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	numSamples := len(flag.Args())
+	samples := make(chan sample)
 	var pimg *polarimetricImage
-
-	for n, name := range flag.Args() {
-		log.Printf("processing %q", name)
-		img, err := openImage(name)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if pimg == nil {
-			pimg = newPolarimetricImage(img.Bounds(), len(flag.Args()))
-		}
-		pimg.addSample(n, img)
+	var wg sync.WaitGroup
+	var initPolarimetricImageOnce sync.Once
+	for i := 0; i < runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go func() {
+			for sample := range samples {
+				log.Printf("processing %q", sample.name)
+				img, err := openImage(sample.name)
+				if err != nil {
+					log.Fatal(err)
+				}
+				initPolarimetricImageOnce.Do(func() {
+					pimg = newPolarimetricImage(img.Bounds(), numSamples)
+				})
+				pimg.addSample(sample.index, img)
+			}
+			wg.Done()
+		}()
 	}
+	for n, name := range flag.Args() {
+		samples <- sample{n, name}
+	}
+	close(samples)
+	wg.Wait()
+
 	img := hsv.Saturate(pimg, *saturation)
 	log.Printf("writing to %q", *out)
 	err := saveImage(*out, img)

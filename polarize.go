@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 	"image/color"
+	"sync"
 
 	"github.com/takeyourhatoff/hsv"
 )
@@ -12,12 +13,14 @@ type polarimetricImage struct {
 	Stride  int
 	Rect    image.Rectangle
 	Samples int
+	LineMu  []sync.Mutex
 }
 
 func newPolarimetricImage(r image.Rectangle, samples int) *polarimetricImage {
 	w, h := r.Dx(), r.Dy()
 	buf := make([]polarimetricPixel, w*h)
-	return &polarimetricImage{buf, w, r, samples}
+	mu := make([]sync.Mutex, h)
+	return &polarimetricImage{buf, w, r, samples, mu}
 }
 
 type polarimetricPixel struct {
@@ -63,10 +66,12 @@ func (p *polarimetricImage) addSample(m int, img image.Image) {
 	b := img.Bounds()
 	b = b.Intersect(p.Bounds())
 	for y := b.Min.Y; y < b.Max.Y; y++ {
+		p.LineMu[y].Lock()
 		for x := b.Min.X; x < b.Max.X; x++ {
 			i := p.PixOffset(x, y)
 			p.Pix[i].addSample(m, p.Samples, img.At(x, y))
 		}
+		p.LineMu[y].Unlock()
 	}
 }
 
