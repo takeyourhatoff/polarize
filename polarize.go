@@ -7,48 +7,67 @@ import (
 	"github.com/takeyourhatoff/hsv"
 )
 
-// Polarimetric returns a polarimetric image calculated from the images in photos.
-// photos should be a slice of photographs taken with a linear polarization filter.
-// Each successive photo in photos should be taken with the polarizing filter rotated by a constant angle.
-func Polarimetric(photos []image.Image) image.Image {
-	return pol{photos}
+type polarimetricImage struct {
+	Pix     []polarimetricPixel
+	Stride  int
+	Rect    image.Rectangle
+	Samples int
 }
 
-type pol struct {
-	is []image.Image
+func newPolarimetricImage(r image.Rectangle, samples int) *polarimetricImage {
+	w, h := r.Dx(), r.Dy()
+	buf := make([]polarimetricPixel, w*h)
+	return &polarimetricImage{buf, w, r, samples}
 }
 
-func (p pol) At(x, y int) color.Color {
-	len := float32(len(p.is))
-	var maxv, avgv, h float32
-	for n, i := range p.is {
-		c := hsv.HSVModel.Convert(i.At(x, y)).(hsv.HSV)
-		if c.V > maxv {
-			maxv = c.V
-			h = float32(n) / len
-		}
-		avgv += c.V * (1 / len)
+type polarimetricPixel struct {
+	maxy    uint8
+	avgv, h float32
+}
+
+func (p *polarimetricPixel) addSample(m, n int, c color.Color) {
+	y := color.GrayModel.Convert(c).(color.Gray).Y
+	if y > p.maxy {
+		p.maxy = y
+		p.h = float32(m) / float32(n)
 	}
+	p.avgv += float32(y) / (255 * float32(n))
+}
+
+func (p *polarimetricPixel) RGBA() (r, g, b, a uint32) {
+	maxv := float32(p.maxy) / 255
 	return hsv.HSV{
-		H: h,                // The angle of the most strongly polarized light
-		S: abs(maxv - avgv), // The magnitude of the polarization
-		V: avgv,             // The average luminance of all input images
-	}
+		H: p.h,
+		S: abs(maxv - p.avgv),
+		V: p.avgv,
+	}.RGBA()
 }
 
-func (p pol) Bounds() image.Rectangle {
-	if len(p.is) == 0 {
-		return image.ZR
+func (p *polarimetricImage) At(x, y int) color.Color {
+	if !(image.Point{x, y}.In(p.Rect)) {
+		return color.RGBA{}
 	}
-	bounds := p.is[0].Bounds()
-	for _, i := range p.is {
-		bounds.Intersect(i.Bounds())
-	}
-	return bounds
+	i := p.PixOffset(x, y)
+	return &p.Pix[i]
 }
 
-func (p pol) ColorModel() color.Model {
-	return hsv.HSVModel
+func (p *polarimetricImage) PixOffset(x, y int) int {
+	return (y-p.Rect.Min.Y)*p.Stride + (x - p.Rect.Min.X)
+}
+
+func (p *polarimetricImage) Bounds() image.Rectangle { return p.Rect }
+
+func (p *polarimetricImage) ColorModel() color.Model { return hsv.HSVModel }
+
+func (p *polarimetricImage) addSample(m int, img image.Image) {
+	b := img.Bounds()
+	b = b.Intersect(p.Bounds())
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			i := p.PixOffset(x, y)
+			p.Pix[i].addSample(m, p.Samples, img.At(x, y))
+		}
+	}
 }
 
 func abs(x float32) float32 {

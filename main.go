@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"image"
-	"image/draw"
 	"image/jpeg"
 	"image/png"
 	"log"
@@ -11,7 +10,6 @@ import (
 	"path"
 	"runtime"
 	"runtime/pprof"
-	"sync"
 
 	"github.com/takeyourhatoff/hsv"
 )
@@ -35,23 +33,21 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	imgs := make([]image.Image, len(flag.Args()))
-	var wg sync.WaitGroup
-	for i, name := range flag.Args() {
-		wg.Add(1)
-		go func(i int, name string) {
-			img, err := openImage(name)
-			if err != nil {
-				log.Fatal(err)
-			}
-			imgs[i] = img
-			wg.Done()
-		}(i, name)
+	var pimg *polarimetricImage
+
+	for n, name := range flag.Args() {
+		log.Printf("processing %q", name)
+		img, err := openImage(name)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if pimg == nil {
+			pimg = newPolarimetricImage(img.Bounds(), len(flag.Args()))
+		}
+		pimg.addSample(n, img)
 	}
-	wg.Wait()
-	img := Polarimetric(imgs)
-	img = hsv.Saturate(img, *saturation)
-	img = pCopyToRGBA(img, runtime.NumCPU())
+	img := hsv.Saturate(pimg, *saturation)
+	log.Printf("writing to %q", *out)
 	err := saveImage(*out, img)
 	if err != nil {
 		log.Fatal(err)
@@ -99,25 +95,4 @@ func saveImage(name string, i image.Image) error {
 		return err
 	}
 	return f.Close()
-}
-
-func pCopyToRGBA(img image.Image, n int) *image.RGBA {
-	out := image.NewRGBA(img.Bounds())
-	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go work(out, img, i, n, &wg)
-	}
-	wg.Wait()
-	return out
-}
-
-func work(out draw.Image, in image.Image, i, n int, wg *sync.WaitGroup) {
-	b := in.Bounds()
-	for y := b.Min.Y + i; y < b.Max.Y; y += n {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			out.Set(x, y, in.At(x, y))
-		}
-	}
-	wg.Done()
 }
