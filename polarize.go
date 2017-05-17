@@ -37,21 +37,21 @@ func (p *polarimetricPixel) addSample(m, n int, c color.Color) {
 	p.avgv += float32(y) / (255 * float32(n))
 }
 
-func (p *polarimetricPixel) RGBA() (r, g, b, a uint32) {
+func (p *polarimetricPixel) HSV() hsv.HSV {
 	maxv := float32(p.maxy) / 255
 	return hsv.HSV{
 		H: p.h,
 		S: abs(maxv - p.avgv),
 		V: p.avgv,
-	}.RGBA()
+	}
 }
 
 func (p *polarimetricImage) At(x, y int) color.Color {
 	if !(image.Point{x, y}.In(p.Rect)) {
-		return color.RGBA{}
+		return hsv.HSV{}
 	}
 	i := p.PixOffset(x, y)
-	return &p.Pix[i]
+	return p.Pix[i].HSV()
 }
 
 func (p *polarimetricImage) PixOffset(x, y int) int {
@@ -66,12 +66,12 @@ func (p *polarimetricImage) addSample(m int, img image.Image) {
 	b := img.Bounds()
 	b = b.Intersect(p.Bounds())
 	for y := b.Min.Y; y < b.Max.Y; y++ {
-		p.LineMu[y].Lock()
+		p.LineMu[y-b.Min.Y].Lock()
 		for x := b.Min.X; x < b.Max.X; x++ {
 			i := p.PixOffset(x, y)
 			p.Pix[i].addSample(m, p.Samples, img.At(x, y))
 		}
-		p.LineMu[y].Unlock()
+		p.LineMu[y-b.Min.Y].Unlock()
 	}
 }
 
