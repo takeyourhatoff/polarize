@@ -39,7 +39,6 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	numSamples := len(flag.Args())
 	samples := make(chan sample)
 	var pimg *polarimetricImage
 	var wg sync.WaitGroup
@@ -54,7 +53,7 @@ func main() {
 					log.Fatal(err)
 				}
 				initPolarimetricImageOnce.Do(func() {
-					pimg = newPolarimetricImage(img.Bounds(), numSamples)
+					pimg = newPolarimetricImage(img.Bounds())
 				})
 				pimg.addSample(sample.index, img)
 			}
