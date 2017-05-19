@@ -2,7 +2,10 @@ package main
 
 import (
 	"image"
+	"image/color"
 	"testing"
+
+	"github.com/takeyourhatoff/hsv"
 )
 
 func BenchmarkPolarimetricImage_addSample(b *testing.B) {
@@ -27,4 +30,31 @@ func BenchmarkPolarimetricImage_At(b *testing.B) {
 			}
 		}
 	}
+}
+
+func TestPolarimetricImage(t *testing.T) {
+	r := image.Rect(0, 0, 3, 1)
+	pol := newPolarimetricImage(r)
+	sample := image.NewGray(r)
+	for x := 0; x < 3; x++ {
+		sample.Set(x, 0, color.White)
+		pol.addSample(x, sample)
+		sample.Set(x, 0, color.Black)
+	}
+	exp := []color.Color{
+		hsv.HSV{H: 0 / 3.0, S: 2 / 3.0, V: 1 / 3.0},
+		hsv.HSV{H: 1 / 3.0, S: 2 / 3.0, V: 1 / 3.0},
+		hsv.HSV{H: 2 / 3.0, S: 2 / 3.0, V: 1 / 3.0},
+	}
+	for x, c := range exp {
+		if colorEq(pol.At(x, 0), c) == false {
+			t.Errorf("x=%v, pol.At(x, 0) = %#v, exp[x] = %#v\n", x, pol.At(x, 0), c)
+		}
+	}
+}
+
+func colorEq(a, b color.Color) bool {
+	r1, g1, b1, a1 := a.RGBA()
+	r2, g2, b2, a2 := b.RGBA()
+	return r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
 }
