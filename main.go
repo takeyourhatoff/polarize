@@ -18,6 +18,7 @@ import (
 var (
 	out        = flag.String("out", "out.jpg", "output location (png/jpeg)")
 	saturation = flag.Float64("saturation", 10, "saturation coefficent")
+	numcpu     = flag.Int("numcpu", runtime.NumCPU(), "number of CPU's to utilize, memory usage is proportional to this flag")
 )
 
 type sample struct {
@@ -45,7 +46,7 @@ func main() {
 	var pimg *polarimetricImage
 	var wg sync.WaitGroup
 	var initPolarimetricImageOnce sync.Once
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for i := 0; i < *numcpu; i++ {
 		wg.Add(1)
 		go func() {
 			for sample := range samples {
