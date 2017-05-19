@@ -24,24 +24,25 @@ func newPolarimetricImage(r image.Rectangle) *polarimetricImage {
 }
 
 type polarimetricPixel struct {
-	maxy    uint8
-	sumv, h float32
+	maxy uint8
+	n    int
+	sumy int64
 }
 
 func (p *polarimetricPixel) addSample(n int, c color.Color) {
 	y := color.GrayModel.Convert(c).(color.Gray).Y
 	if y > p.maxy {
 		p.maxy = y
-		p.h = float32(n)
+		p.n = n
 	}
-	p.sumv += float32(y) / 255
+	p.sumy += int64(y)
 }
 
-func (p *polarimetricPixel) finalize(n int) hsv.HSV {
+func (p *polarimetricPixel) finalize(m int) hsv.HSV {
 	maxv := float32(p.maxy) / 255
-	avgv := p.sumv / float32(n)
+	avgv := float32(p.sumy) / (float32(m) * 255)
 	return hsv.HSV{
-		H: p.h / float32(n),
+		H: float32(p.n) / float32(m),
 		S: abs(maxv - avgv),
 		V: avgv,
 	}
