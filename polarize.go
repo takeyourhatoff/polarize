@@ -43,7 +43,7 @@ func (p *polarimetricPixel) finalize(m int) hsv.HSV {
 	avgv := float32(p.sumy) / (float32(m) * 255)
 	return hsv.HSV{
 		H: float32(p.n) / float32(m),
-		S: abs(maxv - avgv),
+		S: maxv - avgv,
 		V: avgv,
 	}
 }
@@ -76,14 +76,4 @@ func (p *polarimetricImage) addSample(n int, img image.Image) {
 		p.lineMu[y-b.Min.Y].Unlock()
 	}
 	p.samples++
-}
-
-func abs(x float32) float32 {
-	if x < 0 {
-		return -x
-	}
-	if x == 0 {
-		return 0 // return correctly abs(-0)
-	}
-	return x
 }
