@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -24,8 +25,22 @@ type sample struct {
 	name  string
 }
 
+func usage() {
+	fmt.Fprintf(os.Stderr, "usage: %s [options] photo.jpg...\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "options:\n")
+	flag.PrintDefaults()
+	os.Exit(2)
+}
+
 func main() {
+	flag.Usage = usage
 	flag.Parse()
+
+	if len(flag.Args()) == 0 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
 	samples := make(chan sample)
 	var pimg *polarimetricImage
 	var wg sync.WaitGroup
