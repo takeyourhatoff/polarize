@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"runtime/pprof"
 	"sync"
 
 	"github.com/takeyourhatoff/hsv"
@@ -18,8 +17,6 @@ import (
 var (
 	out        = flag.String("out", "out.jpg", "output location (png/jpeg)")
 	saturation = flag.Float64("saturation", 10, "saturation coefficent")
-	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	memprofile = flag.String("memprofile", "", "write mem profile to file")
 )
 
 type sample struct {
@@ -29,16 +26,6 @@ type sample struct {
 
 func main() {
 	flag.Parse()
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer f.Close()
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
 	samples := make(chan sample)
 	var pimg *polarimetricImage
 	var wg sync.WaitGroup
@@ -71,18 +58,6 @@ func main() {
 	err := saveImage(*out, img)
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if *memprofile != "" {
-		f, err := os.Create(*memprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer f.Close()
-		runtime.GC() // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.Fatal(err)
-		}
 	}
 }
 
