@@ -29,6 +29,14 @@ type polarimetricPixel struct {
 	sumy int64
 }
 
+func (p *polarimetricPixel) addYCbCrSample(n int, c color.YCbCr) {
+	if c.Y > p.maxy {
+		p.maxy = c.Y
+		p.n = n
+	}
+	p.sumy += int64(c.Y)
+}
+
 func (p *polarimetricPixel) addSample(n int, c color.Color) {
 	y := color.GrayModel.Convert(c).(color.Gray).Y
 	if y > p.maxy {
@@ -67,11 +75,18 @@ func (p *polarimetricImage) ColorModel() color.Model { return hsv.HSVModel }
 func (p *polarimetricImage) addSample(n int, img image.Image) {
 	b := img.Bounds()
 	b = b.Intersect(p.Bounds())
+	var f func(int, int, int, int)
+	switch iimg := img.(type) {
+	case *image.YCbCr:
+		f = func(i, n, x, y int) { p.Pix[i].addYCbCrSample(n, iimg.YCbCrAt(x, y)) }
+	default:
+		f = func(i, n, x, y int) { p.Pix[i].addSample(n, iimg.At(x, y)) }
+	}
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		p.lineMu[y-b.Min.Y].Lock()
 		for x := b.Min.X; x < b.Max.X; x++ {
 			i := p.PixOffset(x, y)
-			p.Pix[i].addSample(n, img.At(x, y))
+			f(i, n, x, y)
 		}
 		p.lineMu[y-b.Min.Y].Unlock()
 	}
