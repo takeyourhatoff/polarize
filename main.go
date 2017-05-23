@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"runtime/pprof"
 	"sync"
 
 	"github.com/takeyourhatoff/hsv"
@@ -19,6 +20,8 @@ var (
 	out        = flag.String("out", "out.jpg", "output location (png/jpeg)")
 	saturation = flag.Float64("saturation", 10, "saturation coefficent")
 	numcpu     = flag.Int("numcpu", runtime.NumCPU(), "number of CPU's to utilize, memory usage is proportional to this flag")
+	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+	memprofile = flag.String("memprofile", "", "write mem profile to file")
 )
 
 type sample struct {
@@ -40,6 +43,16 @@ func main() {
 	if len(flag.Args()) == 0 {
 		flag.Usage()
 		os.Exit(1)
+	}
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer f.Close()
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	samples := make(chan sample)
@@ -74,6 +87,18 @@ func main() {
 	err := saveImage(*out, img)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer f.Close()
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
