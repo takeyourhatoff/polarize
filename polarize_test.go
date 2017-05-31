@@ -5,7 +5,7 @@ import (
 	"image/color"
 	"testing"
 
-	"github.com/takeyourhatoff/hsv"
+	"github.com/takeyourhatoff/polarize/internal/hsv"
 )
 
 func BenchmarkPolarimetricImage_addSample(b *testing.B) {
