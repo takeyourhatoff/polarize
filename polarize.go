@@ -1,26 +1,67 @@
-package main
+package polarize
 
 import (
 	"image"
 	"image/color"
 	"sync"
 
-	"github.com/takeyourhatoff/hsv"
+	"github.com/takeyourhatoff/polarize/internal/hsv"
 )
 
-type polarimetricImage struct {
-	Pix     []polarimetricPixel
-	Stride  int
-	Rect    image.Rectangle
+type Image struct {
+	pix     []polarimetricPixel
+	stride  int
+	rect    image.Rectangle
 	lineMu  []sync.Mutex
 	samples int
 }
 
-func newPolarimetricImage(r image.Rectangle) *polarimetricImage {
+func New(r image.Rectangle) *Image {
 	w, h := r.Dx(), r.Dy()
 	buf := make([]polarimetricPixel, w*h)
 	mu := make([]sync.Mutex, h)
-	return &polarimetricImage{buf, w, r, mu, 0}
+	return &Image{buf, w, r, mu, 0}
+}
+
+func (p *Image) At(x, y int) color.Color {
+	if !(image.Point{x, y}.In(p.rect)) {
+		return hsv.HSV{}
+	}
+	i := p.PixOffset(x, y)
+	return p.pix[i].finalize(p.samples)
+}
+
+func (p *Image) PixOffset(x, y int) int {
+	return (y-p.rect.Min.Y)*p.stride + (x - p.rect.Min.X)
+}
+
+func (p *Image) Bounds() image.Rectangle { return p.rect }
+
+func (p *Image) ColorModel() color.Model { return hsv.HSVModel }
+
+func (p *Image) AddSample(n int, img image.Image) {
+	b := img.Bounds()
+	b = b.Intersect(p.Bounds())
+	var f func(int, int, int, int)
+	switch iimg := img.(type) {
+	case yCbCrImage:
+		f = func(i, n, x, y int) { p.pix[i].addYCbCrSample(n, iimg.YCbCrAt(x, y)) }
+	default:
+		f = func(i, n, x, y int) { p.pix[i].addSample(n, iimg.At(x, y)) }
+	}
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		p.lineMu[y-b.Min.Y].Lock()
+		for x := b.Min.X; x < b.Max.X; x++ {
+			i := p.PixOffset(x, y)
+			f(i, n, x, y)
+		}
+		p.lineMu[y-b.Min.Y].Unlock()
+	}
+	p.samples++
+}
+
+type yCbCrImage interface {
+	YCbCrAt(x, y int) color.YCbCr
 }
 
 type polarimetricPixel struct {
@@ -54,41 +95,4 @@ func (p *polarimetricPixel) finalize(m int) hsv.HSV {
 		S: maxv - avgv,
 		V: avgv,
 	}
-}
-
-func (p *polarimetricImage) At(x, y int) color.Color {
-	if !(image.Point{x, y}.In(p.Rect)) {
-		return hsv.HSV{}
-	}
-	i := p.PixOffset(x, y)
-	return p.Pix[i].finalize(p.samples)
-}
-
-func (p *polarimetricImage) PixOffset(x, y int) int {
-	return (y-p.Rect.Min.Y)*p.Stride + (x - p.Rect.Min.X)
-}
-
-func (p *polarimetricImage) Bounds() image.Rectangle { return p.Rect }
-
-func (p *polarimetricImage) ColorModel() color.Model { return hsv.HSVModel }
-
-func (p *polarimetricImage) addSample(n int, img image.Image) {
-	b := img.Bounds()
-	b = b.Intersect(p.Bounds())
-	var f func(int, int, int, int)
-	switch iimg := img.(type) {
-	case *image.YCbCr:
-		f = func(i, n, x, y int) { p.Pix[i].addYCbCrSample(n, iimg.YCbCrAt(x, y)) }
-	default:
-		f = func(i, n, x, y int) { p.Pix[i].addSample(n, iimg.At(x, y)) }
-	}
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		p.lineMu[y-b.Min.Y].Lock()
-		for x := b.Min.X; x < b.Max.X; x++ {
-			i := p.PixOffset(x, y)
-			f(i, n, x, y)
-		}
-		p.lineMu[y-b.Min.Y].Unlock()
-	}
-	p.samples++
 }

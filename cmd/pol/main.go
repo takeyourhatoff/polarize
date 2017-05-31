@@ -13,12 +13,13 @@ import (
 	"runtime/pprof"
 	"sync"
 
-	"github.com/takeyourhatoff/hsv"
+	"github.com/takeyourhatoff/polarize"
+	"github.com/takeyourhatoff/polarize/internal/hsv"
 )
 
 var (
 	out        = flag.String("out", "out.jpg", "output location (png/jpeg)")
-	saturation = flag.Float64("saturation", 10, "saturation coefficent")
+	saturation = flag.Float64("saturation", 1, "saturation coefficent")
 	numcpu     = flag.Int("numcpu", runtime.NumCPU(), "number of CPU's to utilize, memory usage is proportional to this flag")
 	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 	memprofile = flag.String("memprofile", "", "write mem profile to file")
@@ -56,7 +57,7 @@ func main() {
 	}
 
 	samples := make(chan sample)
-	var pimg *polarimetricImage
+	var pimg *polarize.Image
 	var wg sync.WaitGroup
 	var initPolarimetricImageOnce sync.Once
 	for i := 0; i < *numcpu; i++ {
@@ -69,9 +70,9 @@ func main() {
 					log.Fatal(err)
 				}
 				initPolarimetricImageOnce.Do(func() {
-					pimg = newPolarimetricImage(img.Bounds())
+					pimg = polarize.New(img.Bounds())
 				})
-				pimg.addSample(sample.index, img)
+				pimg.AddSample(sample.index, img)
 			}
 			wg.Done()
 		}()
