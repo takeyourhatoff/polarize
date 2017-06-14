@@ -11,7 +11,8 @@ import (
 	"path"
 	"runtime"
 	"runtime/pprof"
-	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/takeyourhatoff/polarize"
 	"github.com/takeyourhatoff/polarize/internal/hsv"
@@ -37,6 +38,17 @@ func usage() {
 	os.Exit(2)
 }
 
+func work(i *polarize.Image, samples chan sample) error {
+	for sample := range samples {
+		img, err := openImage(sample.name)
+		if err != nil {
+			return err
+		}
+		i.AddSample(sample.index, img)
+	}
+	return nil
+}
+
 func main() {
 	flag.Usage = usage
 	flag.Parse()
@@ -57,35 +69,26 @@ func main() {
 	}
 
 	samples := make(chan sample)
-	var pimg *polarize.Image
-	var wg sync.WaitGroup
-	var initPolarimetricImageOnce sync.Once
+	var pimg polarize.Image
+	var eg errgroup.Group
 	for i := 0; i < *numcpu; i++ {
-		wg.Add(1)
-		go func() {
-			for sample := range samples {
-				log.Printf("processing %q", sample.name)
-				img, err := openImage(sample.name)
-				if err != nil {
-					log.Fatal(err)
-				}
-				initPolarimetricImageOnce.Do(func() {
-					pimg = polarize.New(img.Bounds())
-				})
-				pimg.AddSample(sample.index, img)
-			}
-			wg.Done()
-		}()
+		eg.Go(func() error {
+			return work(&pimg, samples)
+		})
 	}
 	for n, name := range flag.Args() {
 		samples <- sample{n, name}
+		log.Println("processing: ", name)
 	}
 	close(samples)
-	wg.Wait()
+	err := eg.Wait()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	img := hsv.Saturate(pimg, *saturation)
+	img := hsv.Saturate(&pimg, *saturation)
 	log.Printf("writing to %q", *out)
-	err := saveImage(*out, img)
+	err = saveImage(*out, img)
 	if err != nil {
 		log.Fatal(err)
 	}

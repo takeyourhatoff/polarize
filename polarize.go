@@ -9,18 +9,20 @@ import (
 )
 
 type Image struct {
-	pix     []polarimetricPixel
-	stride  int
-	rect    image.Rectangle
-	lineMu  []sync.Mutex
-	samples int
+	pix      []polarimetricPixel
+	stride   int
+	rect     image.Rectangle
+	lineMu   []sync.Mutex
+	initOnce sync.Once
+	samples  int
 }
 
-func New(r image.Rectangle) *Image {
+func (p *Image) init(r image.Rectangle) {
 	w, h := r.Dx(), r.Dy()
-	buf := make([]polarimetricPixel, w*h)
-	mu := make([]sync.Mutex, h)
-	return &Image{buf, w, r, mu, 0}
+	p.pix = make([]polarimetricPixel, w*h)
+	p.stride = w
+	p.rect = r
+	p.lineMu = make([]sync.Mutex, h)
 }
 
 func (p *Image) At(x, y int) color.Color {
@@ -40,6 +42,9 @@ func (p *Image) Bounds() image.Rectangle { return p.rect }
 func (p *Image) ColorModel() color.Model { return hsv.HSVModel }
 
 func (p *Image) AddSample(n int, img image.Image) {
+	p.initOnce.Do(func() {
+		p.init(img.Bounds())
+	})
 	b := img.Bounds()
 	b = b.Intersect(p.Bounds())
 	var f func(int, int, int, int)

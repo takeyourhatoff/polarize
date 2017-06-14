@@ -10,18 +10,19 @@ import (
 
 func BenchmarkPolarimetricImage_addSample(b *testing.B) {
 	r := image.Rect(0, 0, 1000, 1000)
-	img := New(r)
+	sample := image.NewRGBA(r)
+	var img Image
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			img.AddSample(0, image.Opaque)
+			img.AddSample(0, sample)
 		}
 	})
 }
 
 func BenchmarkPolarimetricImage_addYCbCrSample(b *testing.B) {
 	r := image.Rect(0, 0, 1000, 1000)
-	img := New(r)
+	var img Image
 	sample := image.NewYCbCr(r, image.YCbCrSubsampleRatio420)
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -33,7 +34,7 @@ func BenchmarkPolarimetricImage_addYCbCrSample(b *testing.B) {
 
 func BenchmarkPolarimetricImage_At(b *testing.B) {
 	r := image.Rect(0, 0, 1000, 1000)
-	img := New(r)
+	var img Image
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for y := r.Min.Y; y < r.Max.Y; y++ {
@@ -46,7 +47,7 @@ func BenchmarkPolarimetricImage_At(b *testing.B) {
 
 func TestPolarimetricImage(t *testing.T) {
 	r := image.Rect(0, 0, 3, 1)
-	pol := New(r)
+	var pol Image
 	sample := image.NewGray(r)
 	for x := 0; x < 3; x++ {
 		sample.Set(x, 0, color.White)
@@ -73,7 +74,7 @@ func setYCbCr(i *image.YCbCr, x, y int, c color.Color) {
 
 func TestPolarimetricYCbCrImage(t *testing.T) {
 	r := image.Rect(0, 0, 3, 1)
-	pol := New(r)
+	var pol Image
 	sample := image.NewYCbCr(r, image.YCbCrSubsampleRatio420)
 	for x := 0; x < 3; x++ {
 		setYCbCr(sample, x, 0, color.White)
